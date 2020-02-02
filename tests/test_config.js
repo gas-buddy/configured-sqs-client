@@ -7,7 +7,12 @@ const sqsPort = process.env.SQS_PORT || 9324;
 
 const qConfig = {
   region: 'us-east-1',
-  endpoint: `http://${sqsHost}:${sqsPort}/`,
+  endpoint: {
+    endpoint: `http://${sqsHost}:${sqsPort}/`,
+    accessKeyId: 'key',
+    secretAccessKey: 'secret',
+    sessionToken: 'token',
+  },
   queues: {
     basic: 'basic_queue',
     unreal: 'this_queue_does_not_exist',

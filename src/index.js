@@ -37,16 +37,20 @@ export default class ConfiguredSQSClient extends EventEmitter {
     const { queues, endpoint, endpoints, accountId, region } = config;
 
     if (endpoint || region) {
+      let defaultEp = endpoint;
+      if (typeof endpoint === 'string') {
+        defaultEp = { endpoint, region };
+      }
       this.logger.info('Creating default SQS endpoint', {
-        endpoint,
+        endpoint: defaultEp.endpoint,
         region,
       });
       this.sqsClients[DEFAULT_ENDPOINT] = new SQS({
-        endpoint,
         region,
+        ...defaultEp,
       });
       this.sqsClients[DEFAULT_ENDPOINT][ENDPOINT_CONFIG] = {
-        endpoint,
+        endpoint: defaultEp.endpoint,
         accountId,
       };
     }
@@ -110,5 +114,10 @@ export default class ConfiguredSQSClient extends EventEmitter {
   async stop(context) {
     context.logger.info('Stopping SQS subscriptions');
     await Promise.all(Object.entries(this.queues).map(([, q]) => q.stop(context)));
+  }
+
+  async reconnect() {
+    // TODO
+    return this.sqsClients[DEFAULT_ENDPOINT];
   }
 }
