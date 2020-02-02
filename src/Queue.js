@@ -1,6 +1,14 @@
 import uuid from 'uuid/v4';
 import { Consumer } from 'sqs-consumer';
 
+const ALREADY_LOGGED = Symbol('Reduce duplicate logging');
+
+function safeEmit(q, eventName, arg) {
+  if (q.listenerCount(eventName)) {
+    q.emit(eventName, arg);
+  }
+}
+
 function messageHandlerFunc(context, sqsQueue, handler) {
   return async (message) => {
     const { Body, ...rest } = message;
@@ -21,15 +29,17 @@ function messageHandlerFunc(context, sqsQueue, handler) {
       parsedMessage = JSON.parse(Body);
     } catch (error) {
       logger.error('Failed to parse SQS Body as JSON', context.service.wrapError(error));
-      sqsQueue.queueClient.emit('error', callInfo);
+      Object.defineProperty(error, ALREADY_LOGGED, { value: true, enumerable: false });
+      safeEmit(sqsQueue.queueClient, 'error', callInfo);
       throw error;
     }
     try {
       await handler(messageContext, parsedMessage, rest);
       sqsQueue.queueClient.emit('finish', callInfo);
     } catch (error) {
+      Object.defineProperty(error, ALREADY_LOGGED, { value: true, enumerable: false });
       logger.error('Failed to handle message', context.service.wrapError(error));
-      sqsQueue.queueClient.emit('error', callInfo);
+      safeEmit(sqsQueue.queueClient, 'error', callInfo);
       throw error;
     }
   };
@@ -40,7 +50,7 @@ export default class SqsQueue {
     Object.assign(this, { queueClient, sqs, config });
   }
 
-  publish(context, message, options = {}) {
+  async publish(context, message, options = {}) {
     const { MessageAttributes, ...restOfOptions } = options;
     const correlationId = context.headers?.correlationid || uuid();
     const attributes = {
@@ -57,7 +67,17 @@ export default class SqsQueue {
       ...restOfOptions,
       QueueUrl: this.config.queueUrl,
     };
-    return this.sqs.sendMessage(finalMessage).promise();
+    const callInfo = { operationName: 'publish', message: finalMessage };
+    this.queueClient.emit('start', callInfo);
+    try {
+      const retVal = await this.sqs.sendMessage(finalMessage).promise();
+      this.queueClient.emit('finish', callInfo);
+      return retVal;
+    } catch (error) {
+      callInfo.error = error;
+      safeEmit(this.queueClient, 'error', callInfo);
+      throw error;
+    }
   }
 
   async subscribe(context, handler, options = {}) {
@@ -82,7 +102,12 @@ export default class SqsQueue {
       }
     });
     this.consumer.on('processing_error', (error) => {
-      context.logger.error('Rakuten processing error', context.service.wrapError(error));
+      if (!error[ALREADY_LOGGED]) {
+        context.logger.error('SQS processing error', context.service.wrapError(error));
+      }
+    });
+    this.consumer.on('timeout_error', (error) => {
+      context.logger.error('SQS processing timeout', context.service.wrapError(error));
     });
     if (this.started) {
       await this.consumer.start();
@@ -90,10 +115,12 @@ export default class SqsQueue {
   }
 
   async start() {
-    if (this.consumer) {
-      await this.consumer.start();
+    if (!this.started) {
+      if (this.consumer) {
+        await this.consumer.start();
+      }
+      this.started = true;
     }
-    this.started = true;
   }
 
   async stop() {

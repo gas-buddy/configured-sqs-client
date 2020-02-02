@@ -16,6 +16,10 @@ const qConfig = {
   queues: {
     basic: 'basic_queue',
     unreal: 'this_queue_does_not_exist',
+    quick: 'quick_queue',
+  },
+  subscriptions: {
+    waitTimeSeconds: 1,
   },
   contextFunction(context, message) {
     return {
@@ -33,13 +37,17 @@ const ctx = {
   },
 };
 
+function getPromiseAcceptor() {
+  let acceptReturn;
+  const promise = new Promise((accept) => { acceptReturn = accept; });
+  return { accept: acceptReturn, promise };
+}
+
 tap.test('test_config', async (t) => {
   const messageId = uuid();
   const sqs = new SqsClient(ctx, qConfig);
 
-  let doneAccept;
-  const receivePromise = new Promise((accept) => { doneAccept = accept; });
-
+  const { accept: doneAccept, promise: receivePromise } = getPromiseAcceptor();
   await sqs.subscribe(ctx, 'basic', (req, message) => {
     if (message.messageId === messageId) {
       t.ok(true, 'Should receive the message that was sent');
@@ -68,5 +76,32 @@ tap.test('test_config', async (t) => {
   }
 
   await receivePromise;
+
+  const { accept: quickAccept, promise: quickPromise } = getPromiseAcceptor();
+  const { accept: slowAccept, promise: slowPromise } = getPromiseAcceptor();
+  let alreadyGotItOnce = false;
+
+  await sqs.subscribe(ctx, 'quick', async (_, message) => {
+    if (message.messageId === messageId) {
+      if (alreadyGotItOnce) {
+        t.ok(true, 'Should get quick queue message redelivered');
+        slowAccept();
+      } else {
+        t.ok(true, 'Should receive message on quick queue');
+        alreadyGotItOnce = true;
+        await new Promise(accept => setTimeout(accept, 1500));
+        t.ok(true, 'Should wait 1.5s and timeout');
+        quickAccept();
+      }
+    }
+  }, { handleMessageTimeout: 100 });
+
+  await sqs.publish(ctx, 'quick', { test: true, messageId });
+  t.ok(true, 'Should publish to quick queue');
+
+  await Promise.all([quickPromise, slowPromise]);
+  t.ok(true, 'Should timeout and reprocess timed out message successfully');
+
   await sqs.stop(ctx);
+  t.ok(true, 'Should stop the client');
 });

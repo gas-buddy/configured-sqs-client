@@ -34,7 +34,12 @@ export default class ConfiguredSQSClient extends EventEmitter {
 
     this.config = config;
     this.logger = context.logger;
-    const { queues, endpoint, endpoints, accountId, region } = config;
+    const { queues, endpoint, endpoints, accountId, region, subscriptions } = config;
+
+    this.defaultSubscriptionOptions = {
+      waitTimeSeconds: 5,
+      ...subscriptions,
+    };
 
     if (endpoint || region) {
       let defaultEp = endpoint;
@@ -106,14 +111,18 @@ export default class ConfiguredSQSClient extends EventEmitter {
    * Subscribe to a logical queue with a handler. The handler
    * will receive a context, the message body, and envelope information
    */
-  async subscribe(context: any, logicalQueue: String, handler: (any, any, Map<string, any>) => Promise) {
+  async subscribe(context: any, logicalQueue: String, handler: (any, any, Map<string, any>) => Promise, options: Map<string, any>) {
     const sqsQueue = this.getQueue(context, logicalQueue);
-    return sqsQueue.subscribe(context, handler);
+    return sqsQueue.subscribe(context, handler, {
+      ...this.defaultSubscriptionOptions,
+      ...options,
+    });
   }
 
   async stop(context) {
     context.logger.info('Stopping SQS subscriptions');
     await Promise.all(Object.entries(this.queues).map(([, q]) => q.stop(context)));
+    context.logger.info('SQS subscriptions stopped');
   }
 
   async reconnect() {
