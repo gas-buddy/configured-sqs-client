@@ -1,0 +1,51 @@
+{
+  "name": "@gasbuddy/configured-sqs-client",
+  "version": "0.1.0",
+  "description": "A configuration driven SQS client",
+  "main": "build/index.js",
+  "scripts": {
+    "test": "tap --no-coverage --node-arg=-r --node-arg=@babel/register tests/*.js",
+    "test-some": "tap --node-arg=-r --node-arg=@babel/register",
+    "cover": "cross-env BABEL_ENV=test tap tests/test_*.js",
+    "lint": "eslint .",
+    "build": "babel src --out-dir build",
+    "prepublish": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:gas-buddy/gb-services.git/configured-rabbitmq-client.git"
+  },
+  "keywords": [
+    "sqs",
+    "gasbuddy"
+  ],
+  "author": "GasBuddy",
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/cli": "^7.8.4",
+    "@babel/register": "^7.8.3",
+    "babel-preset-gasbuddy": "^5.6.1",
+    "bluebird": "^3.7.2",
+    "cross-env": "^7.0.0",
+    "eslint-config-gasbuddy": "^5.3.0",
+    "tap": "^14.10.6"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.610.0",
+    "lodash": "^4.17.15",
+    "sqs-consumer": "^5.4.0",
+    "uuid": "^3.4.0"
+  },
+  "nyc": {
+    "include": [
+      "src"
+    ],
+    "require": [
+      "@babel/register"
+    ],
+    "sourceMap": true,
+    "reporter": [
+      "lcov"
+    ]
+  }
+}
