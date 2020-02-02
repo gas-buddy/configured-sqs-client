@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      etcd:
+      sqs-mock:
         image: gasbuddy/sqs-mock
         ports:
           - 9324:9324
