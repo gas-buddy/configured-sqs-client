@@ -24,6 +24,8 @@ function buildQueue(queueClient, logicalName, queueConfig) {
   return new SqsQueue(queueClient, client, { queueUrl, logicalName });
 }
 
+export { MockSQSClient } from './MockSQSClient';
+
 export default class ConfiguredSQSClient extends EventEmitter {
   sqsClients = {}
 
@@ -112,6 +114,16 @@ export default class ConfiguredSQSClient extends EventEmitter {
    * will receive a context, the message body, and envelope information
    */
   async subscribe(context: any, logicalQueue: String, handler: (any, any, Map<string, any>) => Promise, options: Map<string, any>) {
+    if (process.env.DISABLE_SQS_SUBSCRIPTIONS === 'true') {
+      return Promise.resolve(false);
+    }
+    if (process.env.DISABLE_SQS_SUBSCRIPTIONS) {
+      const disabled = process.env.DISABLE_SQS_SUBSCRIPTIONS.split(',');
+      if (disabled.includes(logicalQueue)) {
+        return Promise.resolve(false);
+      }
+    }
+
     const sqsQueue = this.getQueue(context, logicalQueue);
     return sqsQueue.subscribe(context, handler, {
       ...this.defaultSubscriptionOptions,
