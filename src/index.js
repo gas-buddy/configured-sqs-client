@@ -18,7 +18,7 @@ function buildQueue(queueClient, logicalName, queueConfig) {
 
   let queueUrl = name;
   if (!/^https?:/.test(name)) {
-    queueUrl = `${_.trimEnd(client[ENDPOINT_CONFIG].endpoint, '/')}/queue${accountId ? '/' : ''}${accountId || ''}/${name}`;
+    queueUrl = `${_.trimEnd(client[ENDPOINT_CONFIG].endpoint, '/')}${accountId ? '/' : ''}${accountId || ''}/${name}`;
   }
 
   return new SqsQueue(queueClient, client, { queueUrl, logicalName });
