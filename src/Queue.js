@@ -20,7 +20,7 @@ function messageHandlerFunc(context, sqsQueue, handler) {
 
     let messageContext = context;
     if (sqsQueue.queueClient.config.contextFunction) {
-      messageContext = sqsQueue.queueClient.config.contextFunction(context, message);
+      messageContext = await sqsQueue.queueClient.config.contextFunction(context, message);
     }
     const logger = messageContext?.gb?.logger || messageContext.logger;
 
