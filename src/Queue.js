@@ -68,9 +68,42 @@ function messageHandlerFunc(context, sqsQueue, handler) {
   };
 }
 
+async function createConsumer(queueClient, context, handleMessage, options) {
+  const { messageAttributeNames = [], ...consumerOptions } = options;
+  const withCorrelation = ['CorrelationId', 'ErrorDetail', ...messageAttributeNames];
+  const consumer = Consumer.create({
+    attributeNames: ['All'],
+    messageAttributeNames: withCorrelation,
+    ...consumerOptions,
+    queueUrl: queueClient.config.queueUrl,
+    sqs: queueClient.sqs,
+    handleMessage,
+  });
+  consumer.on('error', async (error) => {
+    if (error.code === 'ExpiredToken') {
+      consumer.sqs = await queueClient.reconnect(context, this.sqs);
+    } else {
+      context.logger.error('SQS error', context.service.wrapError(error));
+    }
+  });
+  consumer.on('processing_error', (error) => {
+    if (!error[ALREADY_LOGGED]) {
+      context.logger.error('SQS processing error', context.service.wrapError(error));
+    }
+  });
+  consumer.on('timeout_error', (error) => {
+    context.logger.error('SQS processing timeout', context.service.wrapError(error));
+  });
+  if (queueClient.started) {
+    await consumer.start();
+  }
+  return consumer;
+}
+
 export default class SqsQueue {
   constructor(queueClient, sqs, config) {
     Object.assign(this, { queueClient, sqs, config });
+    this.consumers = [];
   }
 
   async publish(context, message, options = {}) {
@@ -104,52 +137,27 @@ export default class SqsQueue {
   }
 
   async subscribe(context, handler, options = {}) {
-    if (this.consumer) {
-      throw new Error(`Cannot subscribe to the same queue (${this.config.logicalName}) twice`);
-    }
-    const { messageAttributeNames = [], ...consumerOptions } = options;
-    const withCorrelation = ['CorrelationId', 'ErrorDetail', ...messageAttributeNames];
-    this.consumer = Consumer.create({
-      attributeNames: ['All'],
-      messageAttributeNames: withCorrelation,
-      ...consumerOptions,
-      queueUrl: this.config.queueUrl,
-      sqs: this.sqs,
-      handleMessage: messageHandlerFunc(context, this, handler),
-    });
-    this.consumer.on('error', async (error) => {
-      if (error.code === 'ExpiredToken') {
-        this.consumer.sqs = await this.queueClient.reconnect(context, this.sqs);
-      } else {
-        context.logger.error('SQS error', context.service.wrapError(error));
-      }
-    });
-    this.consumer.on('processing_error', (error) => {
-      if (!error[ALREADY_LOGGED]) {
-        context.logger.error('SQS processing error', context.service.wrapError(error));
-      }
-    });
-    this.consumer.on('timeout_error', (error) => {
-      context.logger.error('SQS processing timeout', context.service.wrapError(error));
-    });
-    if (this.started) {
-      await this.consumer.start();
-    }
+    const { readers = 1, ...consumerOptions } = options;
+    const handleMessage = messageHandlerFunc(context, this, handler);
+    await Promise.all(new Array(readers).fill(0).map(async () => {
+      this.consumers.push(await createConsumer(this, context, handleMessage, consumerOptions));
+    }));
+    context.logger.info('Subscribed to SQS queue', { readers, logicalName: this.config.logicalName });
   }
 
   async start() {
     if (!this.started) {
-      if (this.consumer) {
-        await this.consumer.start();
+      if (this.consumers.length) {
+        await Promise.all(this.consumers.map(c => c.start()));
       }
       this.started = true;
     }
   }
 
   async stop() {
-    if (this.consumer) {
-      this.consumer.stop();
-      delete this.consumer;
+    if (this.consumers) {
+      await Promise.all(this.consumers.map(c => c.stop()));
+      delete this.consumers;
     }
     this.started = false;
   }
