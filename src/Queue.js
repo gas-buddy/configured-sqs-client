@@ -37,6 +37,29 @@ function messageHandlerFunc(context, sqsQueue, handler) {
       await handler(messageContext, parsedMessage, rest);
       sqsQueue.queueClient.emit('finish', callInfo);
     } catch (error) {
+      if (error.deadLetter) {
+        if (error.deadLetter === true && !sqsQueue.config.deadLetter) {
+          logger.error('Received deadLetter error but queue has not deadLetter configured', context.service.wrapError(error, {
+            logicalName: sqsQueue.config.logicalName,
+          }));
+        } else {
+          await sqsQueue.queueClient.publish(
+            context,
+            error.deadLetter === true ? sqsQueue.config.deadLetter : error.deadLetter,
+            parsedMessage,
+            {
+              MessageAttributes: {
+                ErrorDetail: {
+                  DataType: 'String',
+                  StringValue: error.message,
+                },
+              },
+            },
+          );
+          // Treat this message as being handled because we have published to deadLetter
+          return;
+        }
+      }
       Object.defineProperty(error, ALREADY_LOGGED, { value: true, enumerable: false });
       logger.error('Failed to handle message', context.service.wrapError(error));
       safeEmit(sqsQueue.queueClient, 'error', callInfo);
@@ -85,7 +108,7 @@ export default class SqsQueue {
       throw new Error(`Cannot subscribe to the same queue (${this.config.logicalName}) twice`);
     }
     const { messageAttributeNames = [], ...consumerOptions } = options;
-    const withCorrelation = ['CorrelationId', ...messageAttributeNames];
+    const withCorrelation = ['CorrelationId', 'ErrorDetail', ...messageAttributeNames];
     this.consumer = Consumer.create({
       attributeNames: ['All'],
       messageAttributeNames: withCorrelation,

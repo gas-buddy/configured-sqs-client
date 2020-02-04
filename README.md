@@ -34,3 +34,8 @@ To receive this message, you would subscribe:
     // Do stuff, await stuff, throw errors, whatever
   });
 ```
+
+If your handler throws an error, the redrive policy of the queue takes over. However, if your handler
+marks that error with a property "deadLetter" that is either true or the name of another queue, the
+failed attempt will be published on the target queue (either the deadLetter property of the queue that
+was configured in your configured-sqs-client config, or the queue specified in the deadLetter error property).

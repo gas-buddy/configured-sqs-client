@@ -12,7 +12,7 @@ function buildQueue(queueClient, logicalName, queueConfig) {
     finalConfig = { name: queueConfig };
   }
 
-  const { name, endpoint } = finalConfig;
+  const { name, endpoint, deadLetter } = finalConfig;
   const client = queueClient.sqsClients[endpoint || DEFAULT_ENDPOINT];
   const { accountId } = client[ENDPOINT_CONFIG];
 
@@ -21,7 +21,7 @@ function buildQueue(queueClient, logicalName, queueConfig) {
     queueUrl = `${_.trimEnd(client[ENDPOINT_CONFIG].endpoint, '/')}${accountId ? '/' : ''}${accountId || ''}/${name}`;
   }
 
-  return new SqsQueue(queueClient, client, { queueUrl, logicalName });
+  return new SqsQueue(queueClient, client, { queueUrl, logicalName, deadLetter });
 }
 
 export { MockSQSClient } from './MockSQSClient';

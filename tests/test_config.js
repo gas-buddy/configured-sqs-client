@@ -18,6 +18,8 @@ const qConfig = {
     basic: 'basic_queue',
     unreal: 'this_queue_does_not_exist',
     quick: 'quick_queue',
+    redrive: { name: 'redrive_queue', deadLetter: 'dead' },
+    dead: 'dead_letter_queue',
   },
   subscriptions: {
     waitTimeSeconds: 1,
@@ -46,9 +48,12 @@ function getPromiseAcceptor() {
 
 tap.test('test_config', async (t) => {
   const messageId = uuid();
+  const throwId = uuid();
+  let alreadyThrew = false;
   const sqs = new SqsClient(ctx, qConfig);
 
   const { accept: doneAccept, promise: receivePromise } = getPromiseAcceptor();
+  const { accept: throwAccept, promise: throwPromise } = getPromiseAcceptor();
   await sqs.subscribe(ctx, 'basic', (req, message) => {
     if (message.messageId === messageId) {
       t.ok(true, 'Should receive the message that was sent');
@@ -56,11 +61,27 @@ tap.test('test_config', async (t) => {
       doneAccept();
     }
   });
+  await sqs.subscribe(ctx, 'redrive', (req, message) => {
+    if (message.throwId === throwId) {
+      if (alreadyThrew) {
+        t.fail('Should not retry an explicit dead letter error');
+        return;
+      }
+      alreadyThrew = true;
+      throwAccept();
+      const error = new Error('I do not like green eggs and ham');
+      error.deadLetter = true;
+      throw error;
+    }
+  });
 
   await sqs.start(ctx);
 
   await sqs.publish(ctx, 'basic', { test: true, messageId });
   t.ok(true, 'Should publish a message');
+
+  await sqs.publish(ctx, 'redrive', { test: true, throwId });
+
 
   try {
     await sqs.publish(ctx, 'foo', { test: true });
@@ -76,7 +97,19 @@ tap.test('test_config', async (t) => {
     t.strictEquals('AWS.SimpleQueueService.NonExistentQueue', error.code, 'Should throw for invalid physical queue');
   }
 
-  await receivePromise;
+  await Promise.all([receivePromise, throwPromise]);
+  t.strictEquals(alreadyThrew, true, 'Should have delivered the throw message');
+
+  const { accept: deadAccept, promise: deadPromise } = getPromiseAcceptor();
+  await sqs.subscribe(ctx, 'dead', (req, message, envelope) => {
+    if (message.throwId === throwId) {
+      t.ok(true, 'Should received dead-lettered message in deadLetter queue');
+      deadAccept(envelope);
+    }
+  });
+  const envelope = await deadPromise;
+  t.strictEquals(envelope.MessageAttributes?.ErrorDetail?.StringValue, 'I do not like green eggs and ham', 'ErrorDetail should be present');
+  t.strictEquals(envelope.MessageAttributes?.CorrelationId?.StringValue, ctx.headers.correlationid, 'CorrelationId should carry forward');
 
   const { accept: quickAccept, promise: quickPromise } = getPromiseAcceptor();
   const { accept: slowAccept, promise: slowPromise } = getPromiseAcceptor();
