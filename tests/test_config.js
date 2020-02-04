@@ -8,9 +8,8 @@ const sqsPort = process.env.SQS_PORT || 9324;
 const qConfig = {
   region: 'us-east-1',
   endpoint: {
-    endpoint: `http://${sqsHost}:${sqsPort}`,
     // ElasticMQ wants "queue" there rather than an account id
-    accountId: process.env.SQS_ACCOUNT_ID || 'queue',
+    endpoint: `http://${sqsHost}:${sqsPort}/queue`,
     accessKeyId: 'key',
     secretAccessKey: 'secret',
     sessionToken: 'token',
