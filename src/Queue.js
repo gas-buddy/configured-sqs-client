@@ -108,7 +108,7 @@ export default class SqsQueue {
 
   async publish(context, message, options = {}) {
     const { MessageAttributes, ...restOfOptions } = options;
-    const correlationId = context.headers?.correlationid || uuid();
+    const correlationId = options.correlationid || context.headers?.correlationid || uuid();
     const attributes = {
       ...MessageAttributes,
       CorrelationId: {

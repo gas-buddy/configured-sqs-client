@@ -14,3 +14,11 @@
 =====
 * More flexible config - queues can be an array. This might make it harder to override in confit, but there are structures that can make that work so I will allow it, and it handles the simple case well.
 * Added getQueueConfiguration method to client to make it easier to co-locate relevant configuration options such as the number of readers on a queue
+
+1.3.1
+=====
+* Pull number of readers for subscriptions from queue config, if present
+
+1.3.2
+=====
+* Allow correlationid to be set as an option on publish
