@@ -20,7 +20,7 @@ export class MockSQSClient {
           Body: message,
           MessageAttributes: {
             DataType: 'String',
-            StringValue: context?.headers?.correlationid || 'mock-correlation-id',
+            StringValue: options.correlationid || context?.headers?.correlationid || 'mock-correlation-id',
           },
         });
       }
