@@ -137,7 +137,7 @@ export default class SqsQueue {
   }
 
   async subscribe(context, handler, options = {}) {
-    const { readers = 1, ...consumerOptions } = options;
+    const { readers = this.config.readers || 1, ...consumerOptions } = options;
     const handleMessage = messageHandlerFunc(context, this, handler);
     await Promise.all(new Array(readers).fill(0).map(async () => {
       this.consumers.push(await createConsumer(this, context, handleMessage, consumerOptions));

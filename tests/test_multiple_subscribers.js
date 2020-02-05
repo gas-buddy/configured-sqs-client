@@ -14,7 +14,7 @@ const qConfig = {
     secretAccessKey: 'secret',
     sessionToken: 'token',
   },
-  queues: ['second_queue'],
+  queues: [{ name: 'second_queue', readers: 2 }],
   subscriptions: {
     waitTimeSeconds: 1,
   },
@@ -65,7 +65,7 @@ tap.test('test_multiple_subscribers', async (t) => {
       completedProcessing = true;
       secondAccept();
     }
-  }, { readers: 2 });
+  });
 
   await sqs.start(ctx);
 
