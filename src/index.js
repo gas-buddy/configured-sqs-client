@@ -7,12 +7,7 @@ const DEFAULT_ENDPOINT = Symbol('Default SQS endpoint');
 const ENDPOINT_CONFIG = Symbol('SQS Endpoint Config');
 
 function buildQueue(queueClient, logicalName, queueConfig) {
-  let finalConfig = queueConfig;
-  if (typeof queueConfig === 'string') {
-    finalConfig = { name: queueConfig };
-  }
-
-  const { name, endpoint, deadLetter } = finalConfig;
+  const { name = logicalName, endpoint, deadLetter } = queueConfig;
   const client = queueClient.sqsClients[endpoint || DEFAULT_ENDPOINT];
   const { accountId } = client[ENDPOINT_CONFIG];
 
@@ -21,7 +16,7 @@ function buildQueue(queueClient, logicalName, queueConfig) {
     queueUrl = `${_.trimEnd(client[ENDPOINT_CONFIG].endpoint, '/')}${accountId ? '/' : ''}${accountId || ''}/${name}`;
   }
 
-  return new SqsQueue(queueClient, client, { queueUrl, logicalName, deadLetter });
+  return new SqsQueue(queueClient, client, { ...queueConfig, queueUrl, logicalName, deadLetter });
 }
 
 export { MockSQSClient } from './MockSQSClient';
@@ -79,11 +74,23 @@ export default class ConfiguredSQSClient extends EventEmitter {
       });
     }
 
-    Object.entries(queues).forEach(([logicalName, qConfig]) => {
-      this.queues[logicalName] = buildQueue(this, logicalName, qConfig);
+    let queueArray = queues;
+    if (!Array.isArray(queues)) {
+      queueArray = Object.entries(queues).map(([logicalName, qConfig]) => {
+        if (typeof qConfig === 'string') {
+          return { logicalName, name: qConfig };
+        }
+        return { logicalName, ...qConfig };
+      });
+    }
+
+    queueArray.map(q => (typeof q === 'string' ? { name: q } : q)).forEach((queueConfig) => {
+      const { logicalName, name } = queueConfig;
+      const localName = logicalName || name;
+      this.queues[localName] = buildQueue(this, localName, queueConfig);
       context.logger.info('Added queue', {
-        logicalName,
-        url: this.queues[logicalName].config.queueUrl,
+        logicalName: localName,
+        url: this.queues[localName].config.queueUrl,
       });
     });
   }
@@ -140,5 +147,16 @@ export default class ConfiguredSQSClient extends EventEmitter {
   async reconnect() {
     // TODO
     return this.sqsClients[DEFAULT_ENDPOINT];
+  }
+
+  getQueueConfiguration(logicalQueue) {
+    const sqsQueue = this.queues[logicalQueue];
+    if (!sqsQueue) {
+      const e = new Error(`Unable to find a logical queue named '${logicalQueue}'`);
+      e.code = 'InvalidQueue';
+      e.domain = 'SqsClient';
+      throw e;
+    }
+    return sqsQueue.config || {};
   }
 }

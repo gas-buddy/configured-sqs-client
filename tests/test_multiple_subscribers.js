@@ -14,9 +14,7 @@ const qConfig = {
     secretAccessKey: 'secret',
     sessionToken: 'token',
   },
-  queues: {
-    second: 'second_queue',
-  },
+  queues: ['second_queue'],
   subscriptions: {
     waitTimeSeconds: 1,
   },
@@ -53,7 +51,7 @@ tap.test('test_multiple_subscribers', async (t) => {
 
   let completedProcessing;
 
-  await sqs.subscribe(ctx, 'second', async (req, message) => {
+  await sqs.subscribe(ctx, 'second_queue', async (req, message) => {
     if (message.message1Id === message1Id) {
       t.notOk(completedProcessing, 'Should not receive the first message after processing was completed');
       t.ok(true, 'Should receive the first message that was sent');
@@ -72,8 +70,8 @@ tap.test('test_multiple_subscribers', async (t) => {
   await sqs.start(ctx);
 
   await Promise.all([
-    sqs.publish(ctx, 'second', { test: true, message1Id }),
-    sqs.publish(ctx, 'second', { test: true, message2Id }),
+    sqs.publish(ctx, 'second_queue', { test: true, message1Id }),
+    sqs.publish(ctx, 'second_queue', { test: true, message2Id }),
     firstPromise,
     secondPromise,
   ]);

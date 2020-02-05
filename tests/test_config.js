@@ -18,7 +18,7 @@ const qConfig = {
     basic: 'basic_queue',
     unreal: 'this_queue_does_not_exist',
     quick: 'quick_queue',
-    redrive: { name: 'redrive_queue', deadLetter: 'dead' },
+    redrive: { name: 'redrive_queue', deadLetter: 'dead', readers: 10 },
     dead: 'dead_letter_queue',
   },
   subscriptions: {
@@ -74,6 +74,8 @@ tap.test('test_config', async (t) => {
       throw error;
     }
   });
+
+  t.strictEquals(sqs.getQueueConfiguration('redrive').readers, 10, 'Configuration should be stored');
 
   await sqs.start(ctx);
 
