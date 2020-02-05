@@ -44,7 +44,7 @@ export default class ConfiguredSQSClient extends EventEmitter {
         defaultEp = { endpoint, region };
       }
       this.logger.info('Creating default SQS endpoint', {
-        endpoint: defaultEp.endpoint,
+        endpoint: defaultEp?.endpoint || 'unspecified',
         region,
       });
       this.sqsClients[DEFAULT_ENDPOINT] = new SQS({
@@ -52,7 +52,7 @@ export default class ConfiguredSQSClient extends EventEmitter {
         ...defaultEp,
       });
       this.sqsClients[DEFAULT_ENDPOINT][ENDPOINT_CONFIG] = {
-        endpoint: defaultEp.endpoint,
+        endpoint: defaultEp?.endpoint || this.sqsClients[DEFAULT_ENDPOINT].endpoint?.href,
         accountId,
       };
     }
