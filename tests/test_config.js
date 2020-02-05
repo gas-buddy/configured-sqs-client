@@ -20,6 +20,7 @@ const qConfig = {
     quick: 'quick_queue',
     redrive: { name: 'redrive_queue', deadLetter: 'dead', readers: 10 },
     dead: 'dead_letter_queue',
+    autoDead: { deadLetter: 'this_should_get_made' },
   },
   subscriptions: {
     waitTimeSeconds: 1,
@@ -76,6 +77,8 @@ tap.test('test_config', async (t) => {
   });
 
   t.strictEquals(sqs.getQueueConfiguration('redrive').readers, 10, 'Configuration should be stored');
+  t.throws(() => sqs.getQueueConfiguration('fakeyfakey'), 'Should throw for invalid queue name');
+  t.ok(sqs.getQueueConfiguration('this_should_get_made'), 'Should auto-create dead letter queue');
 
   await sqs.start(ctx);
 

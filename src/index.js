@@ -84,7 +84,16 @@ export default class ConfiguredSQSClient extends EventEmitter {
       });
     }
 
-    queueArray.map(q => (typeof q === 'string' ? { name: q } : q)).forEach((queueConfig) => {
+    queueArray = queueArray.map(q => (typeof q === 'string' ? { name: q } : q));
+
+    // Fix up any missing queues via deadLetter setting
+    queueArray.filter(q => q.deadLetter).forEach((q) => {
+      if (!queueArray.find(exQ => (exQ.logicalName || exQ.name) === q.deadLetter)) {
+        queueArray.push({ name: q.deadLetter });
+      }
+    });
+
+    queueArray.forEach((queueConfig) => {
       const { logicalName, name } = queueConfig;
       const localName = logicalName || name;
       this.queues[localName] = buildQueue(this, localName, queueConfig);

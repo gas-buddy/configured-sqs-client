@@ -22,3 +22,7 @@
 1.3.2
 =====
 * Allow correlationid to be set as an option on publish
+
+1.3.4
+=====
+* Auto-create a logical queue entry (locally, not on SQS) for deadLetter queue property if it doesn't exist already
