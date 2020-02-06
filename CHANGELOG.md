@@ -26,3 +26,7 @@
 1.3.4
 =====
 * Auto-create a logical queue entry (locally, not on SQS) for deadLetter queue property if it doesn't exist already
+
+1.4.1
+=====
+* Fix MockSQSClient to read config properly (as regular config does)

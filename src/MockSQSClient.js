@@ -12,7 +12,7 @@ export class MockSQSClient {
     });
   }
 
-  async publish(context, logicalQueue, message, options) {
+  async publish(context, logicalQueue, message, options = {}) {
     const mock = this.publishMocks[logicalQueue];
     if (!mock) {
       throw new Error(`Invalid logical queue for publish (${logicalQueue})`);

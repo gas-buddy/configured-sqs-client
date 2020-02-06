@@ -102,7 +102,7 @@ export default class ConfiguredSQSClient extends EventEmitter {
     return sqsQueue;
   }
 
-  async publish(context, logicalQueue, message, options) {
+  async publish(context, logicalQueue, message, options = {}) {
     const sqsQueue = this.getQueue(context, logicalQueue);
     return sqsQueue.publish(context, message, options);
   }
