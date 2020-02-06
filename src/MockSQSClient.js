@@ -1,8 +1,15 @@
+import { normalizeQueueConfig } from './util';
+
 export class MockSQSClient {
   constructor(context, config) {
     const { queues, contextFunction } = config;
     this.contextFunction = contextFunction;
-    this.publishMocks = Object.entries(queues).map(([logicalName]) => ({ logicalName }));
+    this.publishMocks = {};
+    normalizeQueueConfig(queues).forEach((queueConfig) => {
+      const { logicalName, name } = queueConfig;
+      const localName = logicalName || name;
+      this.publishMocks[localName] = { logicalName: localName };
+    });
   }
 
   async publish(context, logicalQueue, message, options) {

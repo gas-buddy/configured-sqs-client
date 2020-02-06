@@ -2,6 +2,7 @@ import _ from 'lodash';
 import { EventEmitter } from 'events';
 import { SQS } from 'aws-sdk';
 import SqsQueue from './Queue';
+import { normalizeQueueConfig } from './util';
 
 const DEFAULT_ENDPOINT = Symbol('Default SQS endpoint');
 const ENDPOINT_CONFIG = Symbol('SQS Endpoint Config');
@@ -74,26 +75,7 @@ export default class ConfiguredSQSClient extends EventEmitter {
       });
     }
 
-    let queueArray = queues;
-    if (!Array.isArray(queues)) {
-      queueArray = Object.entries(queues).map(([logicalName, qConfig]) => {
-        if (typeof qConfig === 'string') {
-          return { logicalName, name: qConfig };
-        }
-        return { logicalName, ...qConfig };
-      });
-    }
-
-    queueArray = queueArray.map(q => (typeof q === 'string' ? { name: q } : q));
-
-    // Fix up any missing queues via deadLetter setting
-    queueArray.filter(q => q.deadLetter).forEach((q) => {
-      if (!queueArray.find(exQ => (exQ.logicalName || exQ.name) === q.deadLetter)) {
-        queueArray.push({ name: q.deadLetter });
-      }
-    });
-
-    queueArray.forEach((queueConfig) => {
+    normalizeQueueConfig(queues).forEach((queueConfig) => {
       const { logicalName, name } = queueConfig;
       const localName = logicalName || name;
       this.queues[localName] = buildQueue(this, localName, queueConfig);

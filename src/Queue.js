@@ -82,6 +82,9 @@ async function createConsumer(queueClient, context, handleMessage, options) {
   consumer.on('error', async (error) => {
     if (error.code === 'ExpiredToken') {
       consumer.sqs = await queueClient.reconnect(context, this.sqs);
+    } else if (error.code === 'AWS.SimpleQueueService.NonExistentQueue') {
+      context.logger.error('Misconfigured queue', context.service.wrapError(error));
+      consumer.stop();
     } else {
       context.logger.error('SQS error', context.service.wrapError(error));
     }
