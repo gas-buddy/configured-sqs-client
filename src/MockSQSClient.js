@@ -1,14 +1,23 @@
-import { normalizeQueueConfig } from './util';
+import { EventEmitter } from 'events';
+import { normalizeQueueConfig, messageHandlerFunc } from './util';
 
-export class MockSQSClient {
+export class MockSQSClient extends EventEmitter {
   constructor(context, config) {
+    super();
     const { queues, contextFunction } = config;
-    this.contextFunction = contextFunction;
+    this.config = {
+      contextFunction,
+    };
     this.publishMocks = {};
     normalizeQueueConfig(queues).forEach((queueConfig) => {
       const { logicalName, name } = queueConfig;
       const localName = logicalName || name;
-      this.publishMocks[localName] = { logicalName: localName };
+      this.publishMocks[localName] = {
+        config: {
+          ...queueConfig,
+          logicalName: localName,
+        },
+      };
     });
   }
 
@@ -17,26 +26,22 @@ export class MockSQSClient {
     if (!mock) {
       throw new Error(`Invalid logical queue for publish (${logicalQueue})`);
     }
+
     const fn = mock.mockSubscriber || mock.subscriber;
     if (!fn) {
       (context.gb?.logger || context.logger || console).warn('Publishing to mock queue with no subscriber');
     } else {
-      let messageContext = context;
-      if (this.contextFunction) {
-        messageContext = this.contextFunction(context, {
-          Body: message,
-          MessageAttributes: {
-            DataType: 'String',
-            StringValue: options.correlationid || context?.headers?.correlationid || 'mock-correlation-id',
-          },
-        });
-      }
-      // TODO options isn't really the same thing here as the envelope... But not sure what is yet
-      fn(messageContext, message, options)
-        .catch((error) => {
-          (context.gb?.logger || context.logger || console).error('Subscriber failed', error);
-          throw error;
-        });
+      const virtualMessage = {
+        Body: JSON.stringify(message),
+        MessageAttributes: {
+          DataType: 'String',
+          StringValue: options.correlationid || context?.headers?.correlationid || 'mock-correlation-id',
+        },
+      };
+      await messageHandlerFunc(context, {
+        config: mock.config,
+        queueClient: this,
+      }, fn)(virtualMessage);
     }
   }
 
