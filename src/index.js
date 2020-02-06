@@ -168,4 +168,11 @@ export default class ConfiguredSQSClient extends EventEmitter {
     }
     return sqsQueue.config || {};
   }
+
+  // eslint-disable-next-line class-methods-use-this
+  reject(message) {
+    const error = new Error(message);
+    error.deadLetter = true;
+    throw error;
+  }
 }
