@@ -50,6 +50,10 @@ export class MockSQSClient extends EventEmitter {
     return this;
   }
 
+  async stop() {
+    delete this.publishMocks;
+  }
+
   async subscribe(context, logicalQueue, handler) {
     const mock = this.publishMocks[logicalQueue];
     if (!mock) {
