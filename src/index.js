@@ -135,6 +135,63 @@ export default class ConfiguredSQSClient extends EventEmitter {
     context.logger.info('SQS subscriptions stopped');
   }
 
+  async moveMessages(context: any, sourceQueue: String, destinationQueue: String, maxMessages: Number = 0xFFFFFF) {
+    const sqsSourceQueue = this.queues[sourceQueue] || buildQueue(this, 'source', { logicalName: 'source', name: sourceQueue });
+    const sqsDestQueue = this.queues[destinationQueue] || buildQueue(this, 'destination', { logicalName: 'destination', name: destinationQueue });
+    let moved = 0;
+    while (moved < maxMessages) {
+      try {
+        // Use long polling to avoid empty message responses
+        const receiveParams = {
+          QueueUrl: sqsSourceQueue.config.queueUrl,
+          MaxNumberOfMessages: Math.min(10, maxMessages - moved),
+          WaitTimeSeconds: 1,
+        };
+
+        // Get messages from the DLQ
+        // Continue looping until no more messages are left
+        // eslint-disable-next-line no-await-in-loop
+        const DLQMessages = await sqsSourceQueue.sqs.receiveMessage(receiveParams).promise();
+
+        if (!DLQMessages.Messages || DLQMessages.Messages.length === 0) {
+          (context.gb?.logger || context.logger).info('moveMessages complete', {
+            sourceQueue,
+            destinationQueue,
+            count: moved,
+          });
+          break;
+        }
+
+        for (const message of DLQMessages.Messages) {
+          // Send message to original queue
+          const outboundMessage = {
+            MessageBody: message.Body,
+            QueueUrl: sqsDestQueue.config.queueUrl,
+          };
+          // eslint-disable-next-line no-await-in-loop
+          await sqsDestQueue.sqs.sendMessage(outboundMessage).promise();
+          moved += 1;
+          // Delete message from DLQ
+          const deleteParams = {
+            QueueUrl: sqsSourceQueue.config.queueUrl,
+            ReceiptHandle: message.ReceiptHandle,
+          };
+          // eslint-disable-next-line no-await-in-loop
+          await sqsSourceQueue.sqs.deleteMessage(deleteParams).promise();
+        }
+      } catch (err) {
+        const errorWrap = context.service?.wrapError || context.gb?.wrapError || (e => e);
+        (context.gb?.logger || context.logger).error('moveMessages failed', errorWrap(err, {
+          sourceQueue,
+          destinationQueue,
+          count: moved,
+        }));
+        throw err;
+      }
+    }
+    return moved;
+  }
+
   async reconnect() {
     // TODO
     return this.sqsClients[DEFAULT_ENDPOINT];
