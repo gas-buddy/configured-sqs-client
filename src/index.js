@@ -170,7 +170,6 @@ export default class ConfiguredSQSClient extends EventEmitter {
           };
           // eslint-disable-next-line no-await-in-loop
           await sqsDestQueue.sqs.sendMessage(outboundMessage).promise();
-          moved += 1;
           // Delete message from DLQ
           const deleteParams = {
             QueueUrl: sqsSourceQueue.config.queueUrl,
@@ -178,6 +177,7 @@ export default class ConfiguredSQSClient extends EventEmitter {
           };
           // eslint-disable-next-line no-await-in-loop
           await sqsSourceQueue.sqs.deleteMessage(deleteParams).promise();
+          moved += 1;
         }
       } catch (err) {
         const errorWrap = context.service?.wrapError || context.gb?.wrapError || (e => e);
