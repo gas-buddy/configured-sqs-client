@@ -13,23 +13,24 @@ async function createConsumer(queueClient, context, handleMessage, options) {
     sqs: queueClient.sqs,
     handleMessage,
   });
+  const errorArgs = { queueUrl: queueClient.config.queueUrl, logicalName: queueClient.config.logicalName };
   consumer.on('error', async (error) => {
     if (error.code === 'ExpiredToken') {
       consumer.sqs = await queueClient.reconnect(context, this.sqs);
     } else if (error.code === 'AWS.SimpleQueueService.NonExistentQueue') {
-      context.logger.error('Misconfigured queue', context.service.wrapError(error));
+      context.logger.error('Misconfigured queue', context.service.wrapError(error, errorArgs));
       consumer.stop();
     } else {
-      context.logger.error('SQS error', context.service.wrapError(error));
+      context.logger.error('SQS error', context.service.wrapError(error, errorArgs));
     }
   });
   consumer.on('processing_error', (error) => {
     if (!error[ALREADY_LOGGED]) {
-      context.logger.error('SQS processing error', context.service.wrapError(error));
+      context.logger.error('SQS processing error', context.service.wrapError(error, errorArgs));
     }
   });
   consumer.on('timeout_error', (error) => {
-    context.logger.error('SQS processing timeout', context.service.wrapError(error));
+    context.logger.error('SQS processing timeout', context.service.wrapError(error, errorArgs));
   });
   if (queueClient.started) {
     await consumer.start();

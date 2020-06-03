@@ -30,7 +30,7 @@ const ctx = {
   logger: console,
   headers: { correlationid: uuid() },
   service: {
-    wrapError(e) { return e; },
+    wrapError(e, args = {}) { return Object.assign(e, args); },
   },
 };
 
