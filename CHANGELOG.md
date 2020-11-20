@@ -30,3 +30,7 @@
 1.4.1
 =====
 * Fix MockSQSClient to read config properly (as regular config does)
+
+1.7.0
+====
+* Make an access denied error stop the consumer, because it is fatal.
