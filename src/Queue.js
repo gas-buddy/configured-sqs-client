@@ -17,6 +17,9 @@ async function createConsumer(queueClient, context, handleMessage, options) {
   consumer.on('error', async (error) => {
     if (error.code === 'ExpiredToken') {
       consumer.sqs = await queueClient.reconnect(context, this.sqs);
+    } else if (error.code === 'AccessDenied') {
+      context.logger.error('Missing permission', context.service.wrapError(error, errorArgs));
+      consumer.stop();
     } else if (error.code === 'AWS.SimpleQueueService.NonExistentQueue') {
       context.logger.error('Misconfigured queue', context.service.wrapError(error, errorArgs));
       consumer.stop();
