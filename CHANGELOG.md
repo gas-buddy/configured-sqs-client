@@ -34,3 +34,7 @@
 1.7.0
 ====
 * Make an access denied error stop the consumer, because it is fatal.
+
+1.8.0
+====
+* Add assumed role check in the config.  If you add an assumedRole, on start we will check to see if the caller's identity Arn contains the assumedRole.  If not throw an error on start, to fail on startup.
