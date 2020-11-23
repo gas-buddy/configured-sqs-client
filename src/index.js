@@ -1,6 +1,6 @@
 import _ from 'lodash';
 import { EventEmitter } from 'events';
-import { SQS } from 'aws-sdk';
+import { SQS, STS } from 'aws-sdk';
 import SqsQueue from './Queue';
 import { normalizeQueueConfig } from './util';
 
@@ -32,7 +32,7 @@ export default class ConfiguredSQSClient extends EventEmitter {
 
     this.config = config;
     this.logger = context.logger;
-    const { queues, endpoint, endpoints, accountId, region, subscriptions } = config;
+    const { queues, endpoint, endpoints, accountId, region, subscriptions, assumedRole } = config;
 
     this.defaultSubscriptionOptions = {
       waitTimeSeconds: 5,
@@ -75,6 +75,10 @@ export default class ConfiguredSQSClient extends EventEmitter {
       });
     }
 
+    if (assumedRole) {
+      this.assumedRole = assumedRole;
+    }
+
     normalizeQueueConfig(queues).forEach((queueConfig) => {
       const { logicalName, name } = queueConfig;
       const localName = logicalName || name;
@@ -87,6 +91,13 @@ export default class ConfiguredSQSClient extends EventEmitter {
   }
 
   async start(context) {
+    if (this.assumedRole) {
+      const sts = new STS({ apiVersion: '2011-06-15' });
+      const { Arn: actualRoleArn } = await sts.getCallerIdentity({}).promise();
+      if (!(actualRoleArn.includes(this.assumedRole))) {
+        throw new Error(`Role is ${actualRoleArn} expecting to contain ${this.assumedRole}`);
+      }
+    }
     await Promise.all(Object.entries(this.queues).map(([, q]) => q.start(context)));
     return this;
   }
