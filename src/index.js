@@ -91,12 +91,12 @@ export default class ConfiguredSQSClient extends EventEmitter {
   }
 
   async start(context) {
-    if (this.assumedRole){
-     const sts = new STS({apiVersion: '2011-06-15'});
-     const { Arn: actualRoleArn } = await sts.getCallerIdentity({}).promise();
-     if (!(actualRoleArn.includes(this.assumedRole))) {
-       throw new Error(`Role is ${actualRoleArn} expecting to contain ${this.assumedRole}`);
-     }
+    if (this.assumedRole) {
+      const sts = new STS({ apiVersion: '2011-06-15' });
+      const { Arn: actualRoleArn } = await sts.getCallerIdentity({}).promise();
+      if (!(actualRoleArn.includes(this.assumedRole))) {
+        throw new Error(`Role is ${actualRoleArn} expecting to contain ${this.assumedRole}`);
+      }
     }
     await Promise.all(Object.entries(this.queues).map(([, q]) => q.start(context)));
     return this;
