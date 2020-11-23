@@ -25,6 +25,7 @@ const qConfig = {
   subscriptions: {
     waitTimeSeconds: 1,
   },
+  assumedRole: 'user',
   contextFunction(context, message) {
     return {
       ...context,
