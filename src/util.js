@@ -63,19 +63,24 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
             logicalName: sqsQueue.config.logicalName,
           }));
         } else {
-          await sqsQueue.queueClient.publish(
-            context,
-            error.deadLetter === true ? sqsQueue.config.deadLetter : error.deadLetter,
-            parsedMessage,
-            {
-              MessageAttributes: {
-                ErrorDetail: {
-                  DataType: 'String',
-                  StringValue: error.message,
+          try {
+            await sqsQueue.queueClient.publish(
+              context,
+              error.deadLetter === true ? sqsQueue.config.deadLetter : error.deadLetter,
+              parsedMessage,
+              {
+                MessageAttributes: {
+                  ErrorDetail: {
+                    DataType: 'String',
+                    StringValue: error.message,
+                  },
                 },
               },
-            },
-          );
+            );
+          } catch (sqsError) {
+            logger.error('Failed to publish to configured DLQ', errorWrap(sqsError));
+            throw sqsError;
+          }
           // Treat this message as being handled because we have published to deadLetter
           return;
         }
