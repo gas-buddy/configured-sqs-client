@@ -63,6 +63,15 @@ tap.test('test_config', async (t) => {
       doneAccept();
     }
   });
+  const testAttr = {
+    MessageAttributes: {
+      TestAttr: {
+        DataType: 'String',
+        StringValue: 'test-attr-value',
+      },
+    },
+  };
+  const fetchTestAttr = { messageAttributeNames: ['TestAttr'] };
   await sqs.subscribe(ctx, 'redrive', (req, message) => {
     if (message.throwId === throwId) {
       if (alreadyThrew) {
@@ -75,7 +84,7 @@ tap.test('test_config', async (t) => {
       error.deadLetter = true;
       throw error;
     }
-  });
+  }, fetchTestAttr);
 
   t.strictEquals(sqs.getQueueConfiguration('redrive').readers, 10, 'Configuration should be stored');
   t.throws(() => sqs.getQueueConfiguration('fakeyfakey'), 'Should throw for invalid queue name');
@@ -85,8 +94,7 @@ tap.test('test_config', async (t) => {
 
   await sqs.publish(ctx, 'basic', { test: true, messageId });
   t.ok(true, 'Should publish a message');
-
-  await sqs.publish(ctx, 'redrive', { test: true, throwId });
+  await sqs.publish(ctx, 'redrive', { test: true, throwId }, testAttr);
 
 
   try {
@@ -110,9 +118,14 @@ tap.test('test_config', async (t) => {
   await sqs.subscribe(ctx, 'dead', (req, message, envelope) => {
     if (message.throwId === throwId) {
       t.ok(true, 'Should received dead-lettered message in deadLetter queue');
+      t.strictEquals(
+        envelope.MessageAttributes.TestAttr?.StringValue,
+        testAttr.MessageAttributes.TestAttr.StringValue,
+        'Should retain message attributes',
+      );
       deadAccept(envelope);
     }
-  });
+  }, fetchTestAttr);
   const envelope = await deadPromise;
   t.strictEquals(envelope.MessageAttributes?.ErrorDetail?.StringValue, 'I do not like green eggs and ham', 'ErrorDetail should be present');
   t.strictEquals(envelope.MessageAttributes?.CorrelationId?.StringValue, ctx.headers.correlationid, 'CorrelationId should carry forward');

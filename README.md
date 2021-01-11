@@ -39,3 +39,10 @@ If your handler throws an error, the redrive policy of the queue takes over. How
 marks that error with a property "deadLetter" that is either true or the name of another queue, the
 failed attempt will be published on the target queue (either the deadLetter property of the queue that
 was configured in your configured-sqs-client config, or the queue specified in the deadLetter error property).
+
+Testing this package
+=====
+```
+docker run -p 9324:9324 gasbuddy/sqs-mock:latest
+npm run test
+```

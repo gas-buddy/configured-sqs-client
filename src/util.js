@@ -63,18 +63,20 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
             logicalName: sqsQueue.config.logicalName,
           }));
         } else {
+          const msgAttributes = {
+            ...rest.MessageAttributes,
+            ErrorDetail: {
+              DataType: 'String',
+              StringValue: error.message,
+            },
+          };
           try {
             await sqsQueue.queueClient.publish(
               context,
               error.deadLetter === true ? sqsQueue.config.deadLetter : error.deadLetter,
               parsedMessage,
               {
-                MessageAttributes: {
-                  ErrorDetail: {
-                    DataType: 'String',
-                    StringValue: error.message,
-                  },
-                },
+                MessageAttributes: msgAttributes,
               },
             );
           } catch (sqsError) {

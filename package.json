@@ -1,10 +1,10 @@
 {
   "name": "@gasbuddy/configured-sqs-client",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "A configuration driven SQS client",
   "main": "build/index.js",
   "scripts": {
-    "test": "tap --no-coverage --node-arg=-r --node-arg=@babel/register tests/*.js",
+    "test": "tap --timeout=30 --no-coverage --node-arg=-r --node-arg=@babel/register tests/*.js",
     "test-some": "tap --node-arg=-r --node-arg=@babel/register",
     "cover": "cross-env BABEL_ENV=test tap tests/test_*.js",
     "lint": "eslint .",
