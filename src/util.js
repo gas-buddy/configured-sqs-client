@@ -1,3 +1,6 @@
+import zlib from 'zlib';
+
+export const supportedCompression = 'deflate';
 export const ALREADY_LOGGED = Symbol('Reduce duplicate logging');
 
 export function normalizeQueueConfig(queues) {
@@ -28,6 +31,25 @@ export function safeEmit(q, eventName, arg) {
   }
 }
 
+
+export function compressMessage(message, compression) {
+  if (compression === true || compression.encoding === supportedCompression) {
+    return {
+      headers: { 'Content-Encoding': supportedCompression },
+      body: zlib.deflateSync(JSON.stringify(message)),
+    };
+  }
+  const e = new Error('Compression type not supported');
+  e.code = 'InvalidEncoding';
+  e.domain = 'SqsClient';
+  throw e;
+}
+
+
+export function inflateMessage(message) {
+  return zlib.inflateSync(Buffer.from(message)).toString();
+}
+
 export function messageHandlerFunc(context, sqsQueue, handler) {
   return async (message) => {
     const { Body, ...rest } = message;
@@ -45,8 +67,16 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
     const errorWrap = context.service?.wrapError || context.gb?.wrapError || (e => e);
 
     let parsedMessage;
+    let decodedMessage;
+    let decodedRest;
     try {
+      const contentEncoding = rest.MessageAttributes?.['Content-Encoding']?.StringValue;
       parsedMessage = JSON.parse(Body);
+      if (contentEncoding === supportedCompression) {
+        decodedMessage = JSON.parse(inflateMessage(parsedMessage));
+        decodedRest = { ...rest };
+        delete decodedRest.MessageAttributes?.['Content-Encoding'];
+      }
     } catch (error) {
       logger.error('Failed to parse SQS Body as JSON', errorWrap(error));
       Object.defineProperty(error, ALREADY_LOGGED, { value: true, enumerable: false });
@@ -54,7 +84,7 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
       throw error;
     }
     try {
-      await handler(messageContext, parsedMessage, rest);
+      await handler(messageContext, decodedMessage || parsedMessage, decodedRest || rest);
       sqsQueue.queueClient.emit('finish', callInfo);
     } catch (error) {
       if (error.deadLetter) {
