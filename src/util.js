@@ -74,7 +74,7 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
       parsedMessage = JSON.parse(Body);
       if (contentEncoding === supportedCompression) {
         decodedMessage = JSON.parse(inflateMessage(parsedMessage));
-        decodedRest = { ...rest };
+        decodedRest = JSON.parse(JSON.stringify(rest)); // deep copy
         delete decodedRest.MessageAttributes?.['Content-Encoding'];
       }
     } catch (error) {
