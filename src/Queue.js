@@ -48,19 +48,22 @@ export default class SqsQueue {
   }
 
   async publish(context, message, options = {}) {
-    const { MessageAttributes = {}, correlationid, compression, ...restOfOptions } = options;
+    const { MessageAttributes = {}, correlationid, compression, publishRaw, ...restOfOptions } = options;
     const correlationId = correlationid || context.headers?.correlationid || uuid();
     let msgBody = message;
-    let additionalAttr = {};
-    if (compression) {
-      ({ body: msgBody, headers: additionalAttr } = compressMessage(message, compression));
+    if (!publishRaw) {
+      msgBody = JSON.stringify(msgBody);
+      let additionalAttr = {};
+      if (compression) {
+        ({ body: msgBody, headers: additionalAttr } = await compressMessage(msgBody, compression));
+      }
+      Object.keys(additionalAttr).forEach((k) => {
+        MessageAttributes[k] = {
+          DataType: 'String',
+          StringValue: additionalAttr[k],
+        };
+      });
     }
-    Object.keys(additionalAttr).forEach((k) => {
-      MessageAttributes[k] = {
-        DataType: 'String',
-        StringValue: additionalAttr[k],
-      };
-    });
     const attributes = {
       ...MessageAttributes,
       CorrelationId: {
@@ -70,7 +73,7 @@ export default class SqsQueue {
     };
 
     const finalMessage = {
-      MessageBody: JSON.stringify(msgBody),
+      MessageBody: msgBody,
       MessageAttributes: attributes,
       ...restOfOptions,
       QueueUrl: this.config.queueUrl,

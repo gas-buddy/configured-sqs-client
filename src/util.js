@@ -31,23 +31,35 @@ export function safeEmit(q, eventName, arg) {
   }
 }
 
+export function deflateMessage(message) {
+  return new Promise((resolve, reject) => zlib.deflate(message, (err, buffer) => {
+    if (err) {
+      reject(err);
+    }
+    resolve(buffer.toString('base64'));
+  }));
+}
 
-export function compressMessage(message, compression) {
+export function inflateMessage(message) {
+  return new Promise((resolve, reject) => zlib.inflate(Buffer.from(message, 'base64'), (err, data) => {
+    if (err) {
+      reject(err);
+    }
+    resolve(data.toString());
+  }));
+}
+
+export async function compressMessage(message, compression) {
   if (compression === true || compression.encoding === supportedCompression) {
     return {
       headers: { 'Content-Encoding': supportedCompression },
-      body: zlib.deflateSync(JSON.stringify(message)),
+      body: await deflateMessage(message),
     };
   }
   const e = new Error('Compression type not supported');
   e.code = 'InvalidEncoding';
   e.domain = 'SqsClient';
   throw e;
-}
-
-
-export function inflateMessage(message) {
-  return zlib.inflateSync(Buffer.from(message)).toString();
 }
 
 export function messageHandlerFunc(context, sqsQueue, handler) {
@@ -67,15 +79,15 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
     const errorWrap = context.service?.wrapError || context.gb?.wrapError || (e => e);
 
     let parsedMessage;
-    let decodedMessage;
-    let decodedRest;
+    let parsedAttr;
     try {
       const contentEncoding = rest.MessageAttributes?.['Content-Encoding']?.StringValue;
-      parsedMessage = JSON.parse(Body);
+      parsedAttr = JSON.parse(JSON.stringify(rest)); // deep copy
       if (contentEncoding === supportedCompression) {
-        decodedMessage = JSON.parse(inflateMessage(parsedMessage));
-        decodedRest = JSON.parse(JSON.stringify(rest)); // deep copy
-        delete decodedRest.MessageAttributes?.['Content-Encoding'];
+        parsedMessage = JSON.parse(await inflateMessage(Body));
+        delete parsedAttr.MessageAttributes?.['Content-Encoding'];
+      } else {
+        parsedMessage = JSON.parse(Body);
       }
     } catch (error) {
       logger.error('Failed to parse SQS Body as JSON', errorWrap(error));
@@ -84,7 +96,7 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
       throw error;
     }
     try {
-      await handler(messageContext, decodedMessage || parsedMessage, decodedRest || rest);
+      await handler(messageContext, parsedMessage, parsedAttr);
       sqsQueue.queueClient.emit('finish', callInfo);
     } catch (error) {
       if (error.deadLetter) {
@@ -104,9 +116,10 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
             await sqsQueue.queueClient.publish(
               context,
               error.deadLetter === true ? sqsQueue.config.deadLetter : error.deadLetter,
-              parsedMessage,
+              Body,
               {
                 MessageAttributes: msgAttributes,
+                publishRaw: true,
               },
             );
           } catch (sqsError) {
