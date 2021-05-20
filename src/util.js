@@ -1,3 +1,6 @@
+import zlib from 'zlib';
+
+export const supportedCompression = 'deflate';
 export const ALREADY_LOGGED = Symbol('Reduce duplicate logging');
 
 export function normalizeQueueConfig(queues) {
@@ -28,6 +31,37 @@ export function safeEmit(q, eventName, arg) {
   }
 }
 
+export function deflateMessage(message) {
+  return new Promise((resolve, reject) => zlib.deflate(message, (err, buffer) => {
+    if (err) {
+      reject(err);
+    }
+    resolve(buffer.toString('base64'));
+  }));
+}
+
+export function inflateMessage(message) {
+  return new Promise((resolve, reject) => zlib.inflate(Buffer.from(message, 'base64'), (err, data) => {
+    if (err) {
+      reject(err);
+    }
+    resolve(data.toString());
+  }));
+}
+
+export async function compressMessage(message, compression) {
+  if (compression === true || compression.encoding === supportedCompression) {
+    return {
+      headers: { 'Content-Encoding': supportedCompression },
+      body: await deflateMessage(message),
+    };
+  }
+  const e = new Error('Compression type not supported');
+  e.code = 'InvalidEncoding';
+  e.domain = 'SqsClient';
+  throw e;
+}
+
 export function messageHandlerFunc(context, sqsQueue, handler) {
   return async (message) => {
     const { Body, ...rest } = message;
@@ -45,8 +79,16 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
     const errorWrap = context.service?.wrapError || context.gb?.wrapError || (e => e);
 
     let parsedMessage;
+    let parsedAttr;
     try {
-      parsedMessage = JSON.parse(Body);
+      const contentEncoding = rest.MessageAttributes?.['Content-Encoding']?.StringValue;
+      parsedAttr = JSON.parse(JSON.stringify(rest)); // deep copy
+      if (contentEncoding === supportedCompression) {
+        parsedMessage = JSON.parse(await inflateMessage(Body));
+        delete parsedAttr.MessageAttributes?.['Content-Encoding'];
+      } else {
+        parsedMessage = JSON.parse(Body);
+      }
     } catch (error) {
       logger.error('Failed to parse SQS Body as JSON', errorWrap(error));
       Object.defineProperty(error, ALREADY_LOGGED, { value: true, enumerable: false });
@@ -54,7 +96,7 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
       throw error;
     }
     try {
-      await handler(messageContext, parsedMessage, rest);
+      await handler(messageContext, parsedMessage, parsedAttr);
       sqsQueue.queueClient.emit('finish', callInfo);
     } catch (error) {
       if (error.deadLetter) {
@@ -74,9 +116,10 @@ export function messageHandlerFunc(context, sqsQueue, handler) {
             await sqsQueue.queueClient.publish(
               context,
               error.deadLetter === true ? sqsQueue.config.deadLetter : error.deadLetter,
-              parsedMessage,
+              Body,
               {
                 MessageAttributes: msgAttributes,
+                publishRaw: true,
               },
             );
           } catch (sqsError) {

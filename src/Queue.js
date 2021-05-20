@@ -1,10 +1,10 @@
 import uuid from 'uuid/v4';
 import { Consumer } from 'sqs-consumer';
-import { ALREADY_LOGGED, messageHandlerFunc, safeEmit } from './util';
+import { ALREADY_LOGGED, compressMessage, messageHandlerFunc, safeEmit } from './util';
 
 async function createConsumer(queueClient, context, handleMessage, options) {
   const { messageAttributeNames = [], ...consumerOptions } = options;
-  const withCorrelation = ['CorrelationId', 'ErrorDetail', ...messageAttributeNames];
+  const withCorrelation = ['CorrelationId', 'ErrorDetail', 'Content-Encoding', ...messageAttributeNames];
   const consumer = Consumer.create({
     attributeNames: ['All'],
     messageAttributeNames: withCorrelation,
@@ -48,8 +48,22 @@ export default class SqsQueue {
   }
 
   async publish(context, message, options = {}) {
-    const { MessageAttributes, correlationid, ...restOfOptions } = options;
+    const { MessageAttributes = {}, correlationid, compression, publishRaw, ...restOfOptions } = options;
     const correlationId = correlationid || context.headers?.correlationid || uuid();
+    let msgBody = message;
+    if (!publishRaw) {
+      msgBody = JSON.stringify(msgBody);
+      let additionalAttr = {};
+      if (compression) {
+        ({ body: msgBody, headers: additionalAttr } = await compressMessage(msgBody, compression));
+      }
+      Object.keys(additionalAttr).forEach((k) => {
+        MessageAttributes[k] = {
+          DataType: 'String',
+          StringValue: additionalAttr[k],
+        };
+      });
+    }
     const attributes = {
       ...MessageAttributes,
       CorrelationId: {
@@ -59,7 +73,7 @@ export default class SqsQueue {
     };
 
     const finalMessage = {
-      MessageBody: JSON.stringify(message),
+      MessageBody: msgBody,
       MessageAttributes: attributes,
       ...restOfOptions,
       QueueUrl: this.config.queueUrl,
