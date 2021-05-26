@@ -40,6 +40,15 @@ marks that error with a property "deadLetter" that is either true or the name of
 failed attempt will be published on the target queue (either the deadLetter property of the queue that
 was configured in your configured-sqs-client config, or the queue specified in the deadLetter error property).
 
+Compression
+=====
+Max message size allowed through SQS is 256kb. You can compress/deflate your message if you think it could go over that limit.
+
+```
+  configuredSqsClient.publish(req, 'basic', { some: 'message' }, { compression: true });
+```
+The deflated message will automatically be inflated before delivering to a consumer
+
 Testing this package
 =====
 ```
