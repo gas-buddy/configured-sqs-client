@@ -38,3 +38,7 @@
 1.8.0
 ====
 * Add assumed role check in the config.  If you add an assumedRole, on start we will check to see if the caller's identity Arn contains the assumedRole.  If not throw an error on start, to fail on startup.
+
+1.9.0
+====
+* Support deflating a message. Deflated message will automatically be inflated before delivering the a consumer

@@ -1,6 +1,6 @@
 {
   "name": "@gasbuddy/configured-sqs-client",
-  "version": "1.8.3",
+  "version": "1.9.0",
   "description": "A configuration driven SQS client",
   "main": "build/index.js",
   "scripts": {
